@@ -107,7 +107,7 @@ def _build_theme_template(
 ) -> None:
     """Build a template using the theme environment."""
 
-    log.debug(f"Building theme template: {template_name}")
+    log.debug(f'Building theme template: {template_name}')
 
     try:
         template = env.get_template(template_name)
@@ -122,7 +122,7 @@ def _build_theme_template(
         utils.write_file(output.encode('utf-8'), output_path)
 
         if template_name == 'sitemap.xml':
-            log.debug(f"Gzipping template: {template_name}")
+            log.debug(f'Gzipping template: {template_name}')
             gz_filename = f'{output_path}.gz'
             with open(gz_filename, 'wb') as f:
                 timestamp = utils.get_build_timestamp()
@@ -137,7 +137,7 @@ def _build_theme_template(
 def _build_extra_template(template_name: str, files: Files, config: MkDocsConfig, nav: Navigation):
     """Build user templates which are not part of the theme."""
 
-    log.debug(f"Building extra template: {template_name}")
+    log.debug(f'Building extra template: {template_name}')
 
     file = files.get_file_from_path(template_name)
     if file is None:
@@ -188,7 +188,7 @@ def _populate_page(page: Page, config: MkDocsConfig, files: Files, dirty: bool =
         message = f"Error reading page '{page.file.src_uri}':"
         # Prevent duplicated the error message because it will be printed immediately afterwards.
         if not isinstance(e, BuildError):
-            message += f" {e}"
+            message += f' {e}'
         log.error(message)
         raise
 
@@ -209,7 +209,7 @@ def _build_page(
         if dirty and not page.file.is_modified():
             return
 
-        log.debug(f"Building page {page.file.src_uri}")
+        log.debug(f'Building page {page.file.src_uri}')
 
         # Activate page. Signals to theme that this is the current page.
         page.active = True
@@ -273,7 +273,7 @@ def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) 
         config.plugins.run_event('pre_build', config=config)
 
         if not dirty:
-            log.info("Cleaning site directory")
+            log.info('Cleaning site directory')
             utils.clean_directory(config.site_dir)
         else:  # pragma: no cover
             # Warn user about problems that may occur with --dirty option
@@ -283,9 +283,9 @@ def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) 
             )
 
         if not live_server:  # pragma: no cover
-            log.info(f"Building documentation to directory: {config.site_dir}")
+            log.info(f'Building documentation to directory: {config.site_dir}')
             if dirty and site_directory_contains_stale_files(config.site_dir):
-                log.info("The directory contains stale files. Use --clean to remove them.")
+                log.info('The directory contains stale files. Use --clean to remove them.')
 
         # First gather all data from all files/pages to ensure all data is consistent across all pages.
 
@@ -301,9 +301,9 @@ def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) 
         # Run `nav` plugin events.
         nav = config.plugins.run_event('nav', nav, config=config, files=files)
 
-        log.debug("Reading markdown pages.")
+        log.debug('Reading markdown pages.')
         for file in files.documentation_pages():
-            log.debug(f"Reading: {file.src_uri}")
+            log.debug(f'Reading: {file.src_uri}')
             assert file.page is not None
             _populate_page(file.page, config, files, dirty)
 
@@ -313,7 +313,7 @@ def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) 
         # Start writing files to site_dir now that all data is gathered. Note that order matters. Files
         # with lower precedence get written first so that files with higher precedence can overwrite them.
 
-        log.debug("Copying static assets.")
+        log.debug('Copying static assets.')
         files.copy_static_files(dirty=dirty)
 
         for template in config.theme.static_templates:
@@ -322,7 +322,7 @@ def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) 
         for template in config.extra_templates:
             _build_extra_template(template, files, config, nav)
 
-        log.debug("Building markdown pages.")
+        log.debug('Building markdown pages.')
         doc_files = files.documentation_pages()
         for file in doc_files:
             assert file.page is not None

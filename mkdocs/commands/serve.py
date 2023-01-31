@@ -60,7 +60,7 @@ def serve(
     dirty = livereload == 'dirty'
 
     def builder(config: Optional[MkDocsConfig] = None):
-        log.info("Building documentation...")
+        log.info('Building documentation...')
         if config is None:
             config = get_config()
 
@@ -115,7 +115,7 @@ def serve(
         try:
             server.serve()
         except KeyboardInterrupt:
-            log.info("Shutting down...")
+            log.info('Shutting down...')
         finally:
             server.shutdown()
     except jinja2.exceptions.TemplateError:
