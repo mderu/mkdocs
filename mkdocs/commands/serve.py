@@ -14,7 +14,7 @@ from mkdocs.commands.build import build
 from mkdocs.config import load_config
 from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.exceptions import Abort
-from mkdocs.livereload import LiveReloadServer
+from mkdocs.server.pluggable_server import LiveReloadServer
 
 log = logging.getLogger(__name__)
 

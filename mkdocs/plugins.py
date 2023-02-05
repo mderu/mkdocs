@@ -35,7 +35,7 @@ import jinja2.environment
 
 from mkdocs import utils
 from mkdocs.config.base import Config, ConfigErrors, ConfigWarnings, LegacyConfig, PlainConfigSchema
-from mkdocs.livereload import LiveReloadServer
+from mkdocs.server.pluggable_server import LiveReloadServer
 from mkdocs.structure.files import Files
 from mkdocs.structure.nav import Navigation
 from mkdocs.structure.pages import Page

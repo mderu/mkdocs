@@ -38,34 +38,9 @@ markdown_extensions:
         use_pygments: false
     - pymdownx.snippets
     - pymdownx.superfences
-    - callouts
-    - mdx_gh_links:
-        user: mkdocs
-        repo: mkdocs
     - mkdocs-click
 
 copyright: Copyright &copy; 2014 <a href="https://twitter.com/_tomchristie">Tom Christie</a>, Maintained by the <a href="/about/release-notes/#maintenance-team">MkDocs Team</a>.
-
-plugins:
-    - search
-    - redirects:
-        redirect_maps:
-            user-guide/plugins.md: dev-guide/plugins.md
-            user-guide/custom-themes.md: dev-guide/themes.md
-            user-guide/styling-your-docs.md: user-guide/choosing-your-theme.md
-    - autorefs
-    - literate-nav:
-        nav_file: README.md
-        implicit_index: true
-    - mkdocstrings:
-        handlers:
-          python:
-            options:
-              docstring_section_style: list
-              members_order: source
-              show_root_heading: true
-              show_source: false
-              show_signature_annotations: true
 
 watch:
     - mkdocs
