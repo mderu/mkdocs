@@ -6,6 +6,15 @@ site_author: MkDocs Team
 repo_url: https://github.com/mkdocs/mkdocs/
 edit_uri: blob/master/docs/
 
+# TODO: Implement reading these config values
+perforce_scm_builder:
+    base_path: //Depot/main/Documentation/mkdocs/...
+    # TODO: Find a way to read from a different stream/depot.
+
+# TODO: Implement reading these config values
+git_scm_builder:
+    default_commitish: master
+
 theme:
     name: mkdocs
     locale: en

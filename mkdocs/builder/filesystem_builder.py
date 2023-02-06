@@ -1,6 +1,7 @@
 from mkdocs import commands
 from mkdocs.config.defaults import MkDocsConfig
 
+
 class FilesystemBuilder():
     """Builds a Mkdocs site directly from the filesystem."""
     def __init__(self, config: MkDocsConfig, live_server: bool = False, dirty: bool = False):
