@@ -63,9 +63,10 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
 
     def __init__(
         self,
-        builder: Callable[[], None],
+        builder, # GitBuilder. Can't include here due to circular import
         host: str,
         port: int,
+        # TODO: Remove root when feasible. This value is deprecated for subsite root.
         root: str,
         mount_path: str = "/",
         polling_interval: float = 0.5,
@@ -80,7 +81,6 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
                 self.address_family = socket.AF_INET6
         except Exception:
             pass
-        self.root = os.path.abspath(root)
         self.mount_path = ("/" + mount_path.lstrip("/")).rstrip("/") + "/"
         self.url = f"http://{self.server_name}:{self.server_port}{self.mount_path}"
         self.build_delay = 0.1
@@ -284,12 +284,20 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
             return []
         else:
             # TODO: stop hardcoding this
-            environ['RELATIVE_SERVER_PATH'] = path[len('//head'):]
-            log.info(path[len('//head'):])
+            environ['RELATIVE_SERVER_PATH'] = '/' + path[2:].split('/', 1)[1]
+            environ['SUBSITE'] = next(s for s in path.split('/', ) if s)
+            if environ['SUBSITE'] == 'head':
+                 environ['SUBSITE'] = 'master'
+
+            log.info(f'Full Path: {path}, Path: {environ["RELATIVE_SERVER_PATH"]}, Subsite: {environ["SUBSITE"]}')
             return self._serve_request2(environ, start_response)
 
     def _serve_request2(self, environ, start_response) -> Optional[Iterable[bytes]]:
         path = environ['RELATIVE_SERVER_PATH']
+        commitish = environ['SUBSITE']
+
+        if not self.builder.get_subsite(commitish).built:
+            self.builder.build(commitish)
 
         if (path + "/").startswith(self.mount_path):
             rel_file_path = path[len(self.mount_path) :]
@@ -298,7 +306,10 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
                 rel_file_path += "index.html"
             # Prevent directory traversal - normalize the path.
             rel_file_path = posixpath.normpath("/" + rel_file_path).lstrip("/")
-            file_path = os.path.join(self.root, rel_file_path)
+            file_path = os.path.join(
+                self.builder.get_subsite(environ['SUBSITE']).config.site_dir,
+                rel_file_path
+            )
         elif path == "/":
             start_response("302 Found", [("Location", urllib.parse.quote(self.mount_path))])
             return []

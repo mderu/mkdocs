@@ -1,11 +1,16 @@
 from __future__ import annotations
+import copy
 
 import gzip
 import logging
 import os
+import subprocess
+import tempfile
+import threading
 import time
-from typing import Any, Dict, Optional, Sequence, Set, Union
+from typing import Any, Dict, Optional, Sequence, Union
 from urllib.parse import urlsplit
+from zipfile import ZipFile
 
 import jinja2
 from jinja2.exceptions import TemplateNotFound
@@ -21,6 +26,190 @@ from mkdocs.structure.pages import Page
 
 log = logging.getLogger(__name__)
 log.addFilter(utils.DuplicateFilter())
+
+
+class SubSite():
+    def __init__(self, config: MkDocsConfig):
+        self.config = config
+        self.built = False
+
+        # TODO: Hook these up to LiveReload server to repair live reload functionality.
+        self.epoch_cond = threading.Condition()
+        self.rebuild_cond = threading.Condition()
+
+
+class GitBuilder():
+    """Builds a Mkdocs site from specific commits in Git.
+
+    Note that there are limitations:
+
+    * The config is not reloaded. At the moment, this is intentional, to avoid older plugins that
+      are no longer installed from crashing the server.
+
+    """
+    def __init__(self, config: MkDocsConfig, live_server: bool = False, dirty: bool = False):
+        self.config = config
+        self.live_server = live_server
+        self.dirty = dirty
+
+        self.subsite_table = {}
+        pass
+
+    def get_commit_hash(self, commitish):
+        """TODO: Move this to a git utility."""
+        # Translate the commitish, like a branch name or tag, to a commit hash. Note that
+        # passing in a commit hash will still return the same commit hash.
+        return subprocess.Popen(
+            f'git rev-list {commitish} -n 1',
+            shell=True,
+            stdout=subprocess.PIPE
+        ).communicate()[0].decode('utf8').strip()
+
+    def get_subsite(self, commitish):
+        """Returns the MkdocsConfig for the given commit hash.
+
+        Note that these are separate to avoid accidental navigation across commits.
+        """
+        commit_hash = self.get_commit_hash(commitish)
+
+        if commit_hash not in self.subsite_table:
+            new_config = copy.deepcopy(self.config)
+            new_config['docs_dir'] = tempfile.mkdtemp(prefix='mkdocs_src_')
+            zip_file = f'{new_config["docs_dir"]}/git.zip'
+            git_archive_cmd = f'git archive --format zip --output {zip_file} {commit_hash}'
+            popen = subprocess.Popen(
+                git_archive_cmd,
+                cwd=self.config.docs_dir,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            stdout,stderr = popen.communicate()
+            with ZipFile(zip_file, 'r') as zipFile:
+                zipFile.extractall(os.path.dirname(zip_file))
+            os.remove(zip_file)
+
+            if popen.returncode != 0:
+                raise RuntimeError(
+                    f"Unable to run `{git_archive_cmd}`.\n"
+                    f"Stdout: {stdout}\nStderr{stderr}"
+                )
+
+            new_config['site_dir'] = tempfile.mkdtemp(prefix='mkdocs_srv_')
+            self.subsite_table[commit_hash] = SubSite(new_config)
+
+        return self.subsite_table[commit_hash]
+
+    # TODO: Stop hardcoding master.
+    def build(self, build_version='master'):
+        """Builds the website from the given commit.
+
+        Here we use a fairly naive approach: we'll rebuild the entire server for every requested
+        commit.
+
+        TODO: Future iterations should de-dupe file copies. Most notably:
+        * MkdocsConfig.docs_dir
+        * MkdcosConfig.site_dir
+        """
+        logger = logging.getLogger('mkdocs')
+
+        # Add CountHandler for strict mode
+        warning_counter = utils.CountHandler()
+        warning_counter.setLevel(logging.WARNING)
+
+        commit_hash = self.get_commit_hash(build_version)
+        subsite = self.get_subsite(commit_hash)
+        config = subsite.config
+
+        if config.strict:
+            logging.getLogger('mkdocs').addHandler(warning_counter)
+
+        try:
+            start = time.monotonic()
+
+            # Run `config` plugin events.
+            self.subsite_table[commit_hash].config = config.plugins.run_event('config', config)
+            config = self.subsite_table[commit_hash].config
+
+            # Run `pre_build` plugin events.
+            config.plugins.run_event('pre_build', config=config)
+
+            if not self.dirty:
+                log.info('Cleaning site directory')
+                utils.clean_directory(config.site_dir)
+            else:  # pragma: no cover
+                # Warn user about problems that may occur with --dirty option
+                log.warning(
+                    "A 'dirty' build is being performed, this will likely lead to inaccurate navigation and other"
+                    " links within your site. This option is designed for site development purposes only."
+                )
+
+            if not self.live_server:  # pragma: no cover
+                log.info(f'Building documentation to directory: {config.site_dir}')
+                if self.dirty and site_directory_contains_stale_files(config.site_dir):
+                    log.info('The directory contains stale files. Use --clean to remove them.')
+
+            # First gather all data from all files/pages to ensure all data is consistent across all pages.
+
+            files = get_files(config)
+            env = config.theme.get_env()
+            files.add_files_from_theme(env, config)
+
+            # Run `files` plugin events.
+            files = config.plugins.run_event('files', files, config=config)
+
+            nav = get_navigation(files, config)
+
+            # Run `nav` plugin events.
+            nav = config.plugins.run_event('nav', nav, config=config, files=files)
+
+            log.debug('Reading markdown pages.')
+            for file in files.documentation_pages():
+                log.debug(f'Reading: {file.src_uri}')
+                assert file.page is not None
+                _populate_page(file.page, config, files, self.dirty)
+
+            # Run `env` plugin events.
+            env = config.plugins.run_event('env', env, config=config, files=files)
+
+            # Start writing files to site_dir now that all data is gathered. Note that order matters. Files
+            # with lower precedence get written first so that files with higher precedence can overwrite them.
+
+            log.debug('Copying static assets.')
+            files.copy_static_files(dirty=self.dirty)
+
+            for template in config.theme.static_templates:
+                _build_theme_template(template, env, files, config, nav)
+
+            for template in config.extra_templates:
+                _build_extra_template(template, files, config, nav)
+
+            log.debug('Building markdown pages.')
+            doc_files = files.documentation_pages()
+            for file in doc_files:
+                assert file.page is not None
+                _build_page(file.page, config, doc_files, nav, env, self.dirty)
+
+            # Run `post_build` plugin events.
+            config.plugins.run_event('post_build', config=config)
+
+            counts = warning_counter.get_counts()
+            if counts:
+                msg = ', '.join(f'{v} {k.lower()}s' for k, v in counts)
+                raise Abort(f'\nAborted with {msg} in strict mode!')
+
+            log.info('Documentation built in %.2f seconds', time.monotonic() - start)
+            subsite.built = True
+        except Exception as e:
+            # Run `build_error` plugin events.
+            config.plugins.run_event('build_error', error=e)
+            if isinstance(e, BuildError):
+                log.error(str(e))
+                raise Abort('\nAborted with a BuildError!')
+            raise
+
+        finally:
+            logger.removeHandler(warning_counter)
 
 
 def get_context(
@@ -238,105 +427,6 @@ def _build_page(
             message += f" {e}"
         log.error(message)
         raise
-
-
-def build(config: MkDocsConfig, live_server: bool = False, dirty: bool = False) -> None:
-    """Perform a full site build."""
-
-    logger = logging.getLogger('mkdocs')
-
-    # Add CountHandler for strict mode
-    warning_counter = utils.CountHandler()
-    warning_counter.setLevel(logging.WARNING)
-    if config.strict:
-        logging.getLogger('mkdocs').addHandler(warning_counter)
-
-    try:
-        start = time.monotonic()
-
-        # Run `config` plugin events.
-        config = config.plugins.run_event('config', config)
-
-        # Run `pre_build` plugin events.
-        config.plugins.run_event('pre_build', config=config)
-
-        if not dirty:
-            log.info('Cleaning site directory')
-            utils.clean_directory(config.site_dir)
-        else:  # pragma: no cover
-            # Warn user about problems that may occur with --dirty option
-            log.warning(
-                "A 'dirty' build is being performed, this will likely lead to inaccurate navigation and other"
-                " links within your site. This option is designed for site development purposes only."
-            )
-
-        if not live_server:  # pragma: no cover
-            log.info(f'Building documentation to directory: {config.site_dir}')
-            if dirty and site_directory_contains_stale_files(config.site_dir):
-                log.info('The directory contains stale files. Use --clean to remove them.')
-
-        # First gather all data from all files/pages to ensure all data is consistent across all pages.
-
-        files = get_files(config)
-        env = config.theme.get_env()
-        files.add_files_from_theme(env, config)
-
-        # Run `files` plugin events.
-        files = config.plugins.run_event('files', files, config=config)
-
-        nav = get_navigation(files, config)
-
-        # Run `nav` plugin events.
-        nav = config.plugins.run_event('nav', nav, config=config, files=files)
-
-        log.debug('Reading markdown pages.')
-        for file in files.documentation_pages():
-            log.debug(f'Reading: {file.src_uri}')
-            assert file.page is not None
-            _populate_page(file.page, config, files, dirty)
-
-        # Run `env` plugin events.
-        env = config.plugins.run_event('env', env, config=config, files=files)
-
-        # Start writing files to site_dir now that all data is gathered. Note that order matters. Files
-        # with lower precedence get written first so that files with higher precedence can overwrite them.
-
-        log.debug('Copying static assets.')
-        files.copy_static_files(dirty=dirty)
-
-        for template in config.theme.static_templates:
-            _build_theme_template(template, env, files, config, nav)
-
-        for template in config.extra_templates:
-            _build_extra_template(template, files, config, nav)
-
-        log.debug('Building markdown pages.')
-        doc_files = files.documentation_pages()
-        for file in doc_files:
-            assert file.page is not None
-            _build_page(file.page, config, doc_files, nav, env, dirty)
-
-        # Run `post_build` plugin events.
-        config.plugins.run_event('post_build', config=config)
-
-        counts = warning_counter.get_counts()
-        if counts:
-            msg = ', '.join(f'{v} {k.lower()}s' for k, v in counts)
-            raise Abort(f'\nAborted with {msg} in strict mode!')
-
-        log.info('Documentation built in %.2f seconds', time.monotonic() - start)
-
-    except Exception as e:
-        # Run `build_error` plugin events.
-        config.plugins.run_event('build_error', error=e)
-        if isinstance(e, BuildError):
-            log.error(str(e))
-            raise Abort('\nAborted with a BuildError!')
-        raise
-
-    finally:
-        logger.removeHandler(warning_counter)
-
 
 def site_directory_contains_stale_files(site_directory: str) -> bool:
     """Check if the site directory contains stale files from a previous build."""

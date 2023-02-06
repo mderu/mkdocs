@@ -30,6 +30,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Set,
 )
 from urllib.parse import urlsplit
 
@@ -459,6 +460,18 @@ class CountHandler(logging.NullHandler):
 
     def get_counts(self) -> List[Tuple[str, int]]:
         return [(logging.getLevelName(k), v) for k, v in sorted(self.counts.items(), reverse=True)]
+
+
+class DuplicateFilter:
+    """Avoid logging duplicate messages."""
+
+    def __init__(self) -> None:
+        self.msgs: Set[str] = set()
+
+    def __call__(self, record: logging.LogRecord) -> bool:
+        rv = record.msg not in self.msgs
+        self.msgs.add(record.msg)
+        return rv
 
 
 # For backward compatibility as some plugins import it.

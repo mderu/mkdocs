@@ -9,6 +9,7 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 import jinja2.exceptions
+from mkdocs.builder.git_builder import GitBuilder
 
 from mkdocs.commands.build import build
 from mkdocs.config import load_config
@@ -59,7 +60,7 @@ def serve(
     live_server = livereload in ('dirty', 'livereload')
     dirty = livereload == 'dirty'
 
-    def builder(config: Optional[MkDocsConfig] = None):
+    def create_builder(config: Optional[MkDocsConfig] = None):
         log.info('Building documentation...')
         if config is None:
             config = get_config()
@@ -73,14 +74,15 @@ def serve(
         # Override a few config settings after validation
         config.site_url = f'http://{config.dev_addr}{mount_path(config)}'
 
-        build(config, live_server=live_server, dirty=dirty)
+        return GitBuilder(config, live_server=live_server, dirty=dirty)
 
     config = get_config()
     config['plugins'].run_event('startup', command='serve', dirty=dirty)
 
     try:
         # Perform the initial build
-        builder(config)
+        builder = create_builder(config)
+        builder.build()
 
         host, port = config.dev_addr
         server = LiveReloadServer(
