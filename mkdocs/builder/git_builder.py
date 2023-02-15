@@ -27,6 +27,7 @@ class GitBuilder(ScmBuilder):
 
     def unpack_version(self, config: MkDocsConfig, commitish: str):
         zip_file = f'{config["docs_dir"]}/git.zip'
+        self._fetch_all()
         git_archive_cmd = f'git archive --format zip --output {zip_file} {commitish}'
         popen = subprocess.Popen(
             git_archive_cmd,
@@ -45,5 +46,24 @@ class GitBuilder(ScmBuilder):
         if popen.returncode != 0:
             raise RuntimeError(
                 f"Unable to run `{git_archive_cmd}`.\n"
+                f"Stdout: {stdout}\nStderr{stderr}"
+            )
+
+    def _fetch_all(self):
+        git_fetch_cmd = f'git fetch --all'
+        popen = subprocess.Popen(
+            git_fetch_cmd,
+            # Note that this docs_dir config is different from the above.
+            # This is the original docs dir, i.e., the docs directory of the Git repo.
+            # Running from this directory creates an archive of only this and subdirectories.
+            cwd=self.config.docs_dir,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout,stderr = popen.communicate()
+        if popen.returncode != 0:
+            raise RuntimeError(
+                f"Unable to run `{git_fetch_cmd}`.\n"
                 f"Stdout: {stdout}\nStderr{stderr}"
             )
