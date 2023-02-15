@@ -7,6 +7,8 @@ class SubSite():
         self.config = config
         self.built = False
 
+        self._shutdown = False
+
         # TODO: Hook these up to LiveReload server to repair live reload functionality.
         self.epoch_cond = threading.Condition()
         self.rebuild_cond = threading.Condition()

@@ -76,6 +76,12 @@ class ScmBuilder():
 
         return self.subsite_table[concrete_version]
 
+    def shutdown_all(self):
+        for subsite in self.subsite_table.values():
+            with subsite.rebuild_cond:
+                subsite.shutdown = True
+                subsite.rebuild_cond.notify_all()
+
     # TODO: Stop hardcoding master.
     def build(self, build_version='master'):
         """Builds the website from the given commit.

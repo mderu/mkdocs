@@ -193,7 +193,7 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
                 self._to_rebuild.clear()
 
             for func in funcs:
-                func()
+                func.build()
 
             with self._epoch_cond:
                 log.info("Reloading browsers")
@@ -205,6 +205,8 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
         with self._rebuild_cond:
             self._shutdown = True
             self._rebuild_cond.notify_all()
+
+        self.builder.shutdown_all()
 
         if self.serve_thread.is_alive():
             super().shutdown()
