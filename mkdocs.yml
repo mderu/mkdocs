@@ -8,8 +8,9 @@ edit_uri: blob/master/docs/
 
 # TODO: Implement reading these config values
 perforce_scm_builder:
-    base_path: //Depot/main/Documentation/mkdocs/...
-    # TODO: Find a way to read from a different stream/depot.
+    # TODO: configure a ticket/user
+    # TODO: Actually read these values in PerforceBuilder
+    server: localhost:1666
 
 # TODO: Implement reading these config values
 git_scm_builder:
