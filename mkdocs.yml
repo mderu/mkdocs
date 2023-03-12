@@ -6,15 +6,15 @@ site_author: MkDocs Team
 repo_url: https://github.com/mkdocs/mkdocs/
 edit_uri: blob/master/docs/
 
-# TODO: Implement reading these config values
-perforce_scm_builder:
-    # TODO: configure a ticket/user
-    # TODO: Actually read these values in PerforceBuilder
-    server: localhost:1666
+# perforce_scm_builder:
+#     # TODO: Optionally configure a ticket/user
+#     server: localhost:1666
+#     docs_depot_path: //depot/main/path/to/docs/...
+#     # Must be a label, datespec, or client name
+#     default_label: now
 
-# TODO: Implement reading these config values
-git_scm_builder:
-    default_commitish: master
+# git_scm_builder:
+#     default_commitish: master
 
 theme:
     name: mkdocs

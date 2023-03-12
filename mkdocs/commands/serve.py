@@ -10,6 +10,8 @@ from urllib.parse import urlsplit
 
 import jinja2.exceptions
 from mkdocs.builder.git_builder import GitBuilder
+from mkdocs.builder.perforce_builder import PerforceBuilder
+from mkdocs.builder.filesystem_builder import FilesystemBuilder
 
 from mkdocs.commands.build import build
 from mkdocs.config import load_config
@@ -74,7 +76,12 @@ def serve(
         # Override a few config settings after validation
         config.site_url = f'http://{config.dev_addr}{mount_path(config)}'
 
-        return GitBuilder(config, live_server=live_server, dirty=dirty)
+        if config.perforce_scm_builder:
+            return PerforceBuilder(config, live_server=live_server, dirty=dirty)
+        elif config.git_scm_builder:
+            return GitBuilder(config, live_server=live_server, dirty=dirty)
+        else:
+            return FilesystemBuilder(config, live_server=live_server, dirty=dirty)
 
     config = get_config()
     config['plugins'].run_event('startup', command='serve', dirty=dirty)

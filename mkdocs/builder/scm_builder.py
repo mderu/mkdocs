@@ -82,8 +82,10 @@ class ScmBuilder():
                 subsite.shutdown = True
                 subsite.rebuild_cond.notify_all()
 
-    # TODO: Stop hardcoding master.
-    def build(self, build_version='master'):
+    def get_default_version(self):
+        raise NotImplementedError('This must be implemented.')
+
+    def build(self, build_version=''):
         """Builds the website from the given commit.
 
         Here we use a fairly naive approach: we'll rebuild the entire server for every requested
@@ -94,6 +96,8 @@ class ScmBuilder():
         * MkdcosConfig.site_dir
         """
         logger = logging.getLogger('mkdocs')
+        if not build_version:
+            build_version = self.get_default_version()
 
         # Add CountHandler for strict mode
         warning_counter = utils.CountHandler()

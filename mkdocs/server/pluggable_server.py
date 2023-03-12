@@ -270,7 +270,7 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
         # was a path that points to a specific revision.
         #
         # If the referer link does come from this host, and begins with '//', we'll link to the
-        # previously chosen commit/CL+shelve. Otherwise, we'll redirect to head.
+        # previously chosen commit/CL+shelve. Otherwise, we'll redirect to the default version.
         if not path.startswith('//'):
             env_var = 'HTTP_REFERER'
             if env_var in environ:
@@ -281,15 +281,15 @@ class LiveReloadServer(socketserver.ThreadingMixIn, wsgiref.simple_server.WSGISe
                     start_response('302 Found', [('Location',f'{scheme_and_domain}{prefix}{path}')])
                     return []
 
-            # TODO: Configuration for which branch, depot, or stream is head.
-            start_response('302 Found', [('Location',f'{scheme_and_domain}//head{path}')])
+            default_version = self.builder.get_default_version()
+            start_response('302 Found', [('Location',f'{scheme_and_domain}//{default_version}{path}')])
             return []
         else:
             # TODO: stop hardcoding this
             environ['RELATIVE_SERVER_PATH'] = '/' + path[2:].split('/', 1)[1]
-            environ['SUBSITE'] = next(s for s in path.split('/', ) if s)
+            environ['SUBSITE'] = next((s for s in path.split('/', ) if s), '')
             if environ['SUBSITE'] == 'head':
-                 environ['SUBSITE'] = 'master'
+                 environ['SUBSITE'] = ''
 
             log.info(f'Full Path: {path}, Path: {environ["RELATIVE_SERVER_PATH"]}, Subsite: {environ["SUBSITE"]}')
             return self._serve_request2(environ, start_response)

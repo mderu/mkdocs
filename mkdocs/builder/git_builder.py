@@ -25,6 +25,9 @@ class GitBuilder(ScmBuilder):
                                f'{self.config.docs_dir}')
         return ret_value
 
+    def get_default_version(self):
+        return self.config.git_scm_builder['default_commitish']
+
     def unpack_version(self, config: MkDocsConfig, commitish: str):
         zip_file = f'{config["docs_dir"]}/git.zip'
         self._fetch_all()

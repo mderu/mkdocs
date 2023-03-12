@@ -84,6 +84,10 @@ class MkDocsConfig(base.Config):
     is ignored."""
 
     extra_css = c.Type(list, default=[])
+
+    perforce_scm_builder = c.Type(dict, default={})
+    git_scm_builder = c.Type(dict, default={})
+
     extra_javascript = c.Type(list, default=[])
     """Specify which css or javascript files from the docs directory should be
     additionally included in the site."""

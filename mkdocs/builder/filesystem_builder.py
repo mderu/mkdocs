@@ -1,14 +1,16 @@
 from mkdocs import commands
+from mkdocs.builder.scm_builder import ScmBuilder
 from mkdocs.config.defaults import MkDocsConfig
 
 
-class FilesystemBuilder():
+class FilesystemBuilder(ScmBuilder):
     """Builds a Mkdocs site directly from the filesystem."""
-    def __init__(self, config: MkDocsConfig, live_server: bool = False, dirty: bool = False):
-        self.config = config
-        self.live_server = live_server
-        self.dirty = dirty
-        pass
+    def get_default_version(self):
+        return 'filesystem'
 
-    def build(self, build_version):
-        commands.build(self.config, self.live_server, self.dirty)
+    def get_concrete_version(self, *_, **__):
+        return 'filesystem'
+
+    def unpack_version(self, config: MkDocsConfig, concrete_verison: str):
+        config["docs_dir"] = self.config['docs_dir']
+        return
